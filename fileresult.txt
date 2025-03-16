@@ -1,0 +1,4 @@
+➜  finder-app git:(main) ✗ make CROSS_COMPILE=aarch64-none-linux-gnu-
+aarch64-none-linux-gnu-gcc -O3 -Wall -Wextra -pedantic -Wno-sign-compare -c -o writer.o writer.c
+aarch64-none-linux-gnu-gcc -fopenmp -o writer writer.o
+➜  finder-app git:(main) ✗
