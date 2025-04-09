@@ -9,15 +9,33 @@
 */
 bool do_system(const char *cmd)
 {
-
 /*
  * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
-*/
-
-    return true;
+*/ 
+    int rc = system(cmd);
+    if (rc == -1)
+    {
+        // system() failed
+        return false;
+    }
+    else
+    {
+        // Check if the command terminated normally
+        if (WIFEXITED(rc))
+        {
+            // Check the exit status of the command
+            int exit_status = WEXITSTATUS(rc);
+            return exit_status == 0;
+        }
+        else
+        {
+            // Command did not terminate normally
+            return false;
+        }
+    }
 }
 
 /**
@@ -56,9 +74,39 @@ bool do_exec(int count, ...)
  *   Use the command[0] as the full path to the command to execute
  *   (first argument to execv), and use the remaining arguments
  *   as second argument to the execv() command.
- *
-*/
-
+*/ 
+    pid_t pid = fork();
+    if(pid == -1)
+    {
+      // Fork failed
+      return false;
+    }
+    else if(pid == 0)
+    {
+        // Child process
+        execv(command[0], command);
+        // If execv returns, an error occurred
+        _exit(EXIT_FAILURE);
+    }
+    else {
+       // Parent process
+        int status;
+        if (waitpid(pid, &status, 0) == -1)
+        {
+            // waitpid failed
+            return false;
+        }
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        {
+            // Child exited normally with status 0
+            return true;
+        }
+        else
+        {
+            // Child exited with an error or was terminated
+            return false;
+        }
+    }
     va_end(args);
 
     return true;
@@ -69,31 +117,82 @@ bool do_exec(int count, ...)
 *   This file will be closed at completion of the function call.
 * All other parameters, see do_exec above
 */
+/**
+* @param outputfile - The full path to the file to write with command output.
+*   This file will be closed at completion of the function call.
+* All other parameters, see do_exec above
+*/
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
     va_list args;
     va_start(args, count);
-    char * command[count+1];
-    int i;
-    for(i=0; i<count; i++)
+
+    // Allocate memory for command arguments
+    char *command[count + 1];
+    for (int i = 0; i < count; i++)
     {
         command[i] = va_arg(args, char *);
     }
-    command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
-
-
-/*
- * TODO
- *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
- *   redirect standard out to a file specified by outputfile.
- *   The rest of the behaviour is same as do_exec()
- *
-*/
-
+    command[count] = NULL; // Null-terminate the argument list
     va_end(args);
 
-    return true;
+    // Open the output file for writing
+    int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0)
+    {
+        perror("open");
+        return false;
+    }
+
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        // Fork failed
+        perror("fork");
+        close(fd);
+        return false;
+    }
+    else if (pid == 0)
+    {
+        // Child process
+
+        // Redirect standard output to the file
+        if (dup2(fd, STDOUT_FILENO) == -1)
+        {
+            perror("dup2");
+            close(fd);
+            _exit(EXIT_FAILURE);
+        }
+        close(fd); // Close the file descriptor as it's no longer needed
+
+        // Execute the command
+        execv(command[0], command);
+
+        // If execv returns, an error occurred
+        perror("execv");
+        _exit(EXIT_FAILURE);
+    }
+    else
+    {
+        // Parent process
+        close(fd); // Close the file descriptor as it's no longer needed
+
+        int status;
+        if (waitpid(pid, &status, 0) == -1)
+        {
+            // waitpid failed
+            perror("waitpid");
+            return false;
+        }
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        {
+            // Child exited normally with status 0
+            return true;
+        }
+        else
+        {
+            // Child exited with an error or was terminated
+            return false;
+        }
+    }
 }
