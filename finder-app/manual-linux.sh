@@ -96,10 +96,11 @@ cp -a ${SYSROOT}/lib64/libresolv.so.2 ${OUTDIR}/rootfs/lib64 2>/dev/null || true
 # ${CROSS_COMPILE}readelf -a busybox | grep NEEDED
 #
 # TODO: Make device nodes
-sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
-sudo mknod -m 622 ${OUTDIR}/rootfs/dev/console c 5 1
+echo "Copying /dev/null and /dev/console from host system"
+sudo cp -a /dev/null ${OUTDIR}/rootfs/dev/
+sudo cp -a /dev/console ${OUTDIR}/rootfs/dev/
 
-# TODO: Copy the finder related scripts and executables to the /home directory
+#TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 mkdir -p "${OUTDIR}/rootfs/home/conf"
 cp -r "${FINDER_APP_DIR}/../conf/"* "${OUTDIR}/rootfs/home/conf/"
