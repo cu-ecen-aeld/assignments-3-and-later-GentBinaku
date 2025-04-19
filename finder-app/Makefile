@@ -4,7 +4,7 @@ TARGET  ?= writer
 # Compiler and linker
 CC      := $(CROSS_COMPILE)gcc
 LD      := $(CROSS_COMPILE)ld
-LDFLAGS := -fopenmp
+LDFLAGS := -fopenmp -lc
 CCFLAGS := -O3 -Wall -Wextra -pedantic -Wno-sign-compare
 
 # Source and object files
@@ -16,7 +16,7 @@ all: $(TARGET)
 
 # Linking
 $(TARGET): $(OBJ)
-	$(CC) $(CCFLAGS) $(INCLUDES) -o $(TARGET) $(LDFLAGS)
+	$(CC) $(CCFLAGS) $(LDFLAGS) $(INCLUDES) -o $@ $^
 
 # Compiling
 $(OBJ): $(SRC)
