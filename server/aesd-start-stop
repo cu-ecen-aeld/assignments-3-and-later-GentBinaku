@@ -9,7 +9,7 @@
 # Description:       Manages the aesdsocket daemon lifecycle
 ### END INIT INFO
 
-DAEMON=/usr/local/bin/aesdsocket
+DAEMON=/usr/bin/aesdsocket
 DAEMON_OPTS="-d"
 NAME=aesdsocket
 PIDFILE=/var/run/${NAME}.pid
