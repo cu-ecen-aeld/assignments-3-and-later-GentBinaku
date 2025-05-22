@@ -3,10 +3,10 @@
 TARGET  ?= aesdsocket
 
 # Compiler and linker
-CC      := $(CROSS_COMPILE)gcc
-LD      := $(CROSS_COMPILE)ld
-LDFLAGS := -fopenmp -lc
-CCFLAGS := -O3 -Wall -Wextra -pedantic -Wno-sign-compare
+CC      ?= $(CROSS_COMPILE)gcc
+LD      ?= $(CROSS_COMPILE)ld
+LDFLAGS ?= -fopenmp -lc
+CCFLAGS ?= -O3 -Wall -Wextra -pedantic -Wno-sign-compare
 
 # Source and object files
 SRC  := server.c
