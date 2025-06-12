@@ -10,8 +10,10 @@
 
 #ifdef __KERNEL__
 #include <linux/string.h>
+#include <linux/slab.h>
 #else
 #include <string.h>
+#include <stdio.h>
 #endif
 
 #include "aesd-circular-buffer.h"
@@ -29,10 +31,32 @@
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
-    /**
-    * TODO: implement per description
-    */
-    return NULL;
+    if (!buffer || !entry_offset_byte_rtn)
+        return NULL;
+
+    size_t cumulative_offset = 0;
+    uint8_t index = buffer->out_offs;
+    size_t i;
+
+    for (i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
+    {
+        struct aesd_buffer_entry *entry = &buffer->entry[index];
+
+        if (entry->buffptr == NULL || entry->size == 0)
+            break;
+
+        if (char_offset < cumulative_offset + entry->size)
+        {
+            // Found the entry containing the offset
+            *entry_offset_byte_rtn = char_offset - cumulative_offset;
+            return entry;
+        }
+
+        cumulative_offset += entry->size;
+        index = (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    }
+
+    return NULL; // Not found
 }
 
 /**
@@ -44,9 +68,21 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 */
 void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    /**
-    * TODO: implement per description
-    */
+    // Copy the new entry to the position indicated by in_offs
+    memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(struct aesd_buffer_entry));
+    
+    // If buffer is full, we need to advance out_offs as we're overwriting the oldest entry
+    if (buffer->full) {
+        buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    }
+    
+    // Advance in_offs to the next position
+    buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    
+    // If in_offs has caught up to out_offs, the buffer is now full
+    if (buffer->in_offs == buffer->out_offs) {
+        buffer->full = true;
+    }
 }
 
 /**
@@ -56,3 +92,22 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 {
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
 }
+
+/*
+ * Release the circular buffer
+*/
+void aesd_circular_buffer_deinit(struct aesd_circular_buffer *buffer)
+{
+    uint8_t index;
+    struct aesd_buffer_entry *entry = NULL;
+
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, buffer, index)
+    {
+#ifdef __KERNEL__
+        kfree(entry->buffptr);
+#else
+        free((void*)entry->buffptr);
+#endif
+    }
+}
+
