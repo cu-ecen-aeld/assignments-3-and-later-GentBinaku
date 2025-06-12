@@ -21,7 +21,6 @@
 #include <linux/kernel.h>  // min()
 #include <linux/mutex.h>
 #include <linux/string.h>
-#include "aesd-circular-buffer.h"
 #include "aesdchar.h"
 
     int aesd_major = 0; // use dynamic major
