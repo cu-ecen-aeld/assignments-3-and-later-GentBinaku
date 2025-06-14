@@ -143,7 +143,8 @@
         for (i = start_idx; i < entry->size; i++) {
             if (entry->buffptr[i] == '\n') {
                 // Entry is complete, add to circular buffer
-                complete_entry = aesd_circular_buffer_add_entry(&dev->aesd_buffer, entry);
+                aesd_circular_buffer_add_entry(&dev->aesd_buffer, entry);
+
                 if (complete_entry)
                     kfree(complete_entry);
 
