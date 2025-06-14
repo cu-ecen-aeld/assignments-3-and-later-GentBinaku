@@ -92,22 +92,3 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 {
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
 }
-
-/*
- * Release the circular buffer
-*/
-void aesd_circular_buffer_deinit(struct aesd_circular_buffer *buffer)
-{
-    uint8_t index;
-    struct aesd_buffer_entry *entry = NULL;
-
-    AESD_CIRCULAR_BUFFER_FOREACH(entry, buffer, index)
-    {
-#ifdef __KERNEL__
-        kfree(entry->buffptr);
-#else
-        free((void*)entry->buffptr);
-#endif
-    }
-}
-

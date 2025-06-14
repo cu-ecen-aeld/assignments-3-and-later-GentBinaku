@@ -100,7 +100,6 @@
         ssize_t retval = -ENOMEM;
         struct aesd_dev *dev;
         struct aesd_buffer_entry *entry;
-        char *complete_entry = NULL;
         size_t i, start_idx;
 
         if (!filp || !buf || !f_pos)
@@ -144,10 +143,6 @@
             if (entry->buffptr[i] == '\n') {
                 // Entry is complete, add to circular buffer
                 aesd_circular_buffer_add_entry(&dev->aesd_buffer, entry);
-
-                if (complete_entry)
-                    kfree(complete_entry);
-
                 // Reset entry for next write
                 entry->size = 0;
                 entry->buffptr = NULL;
@@ -198,6 +193,7 @@ int aesd_init_module(void)
     mutex_init(&aesd_device.aesd_mutex);
     aesd_circular_buffer_init(&aesd_device.aesd_buffer);
     result = aesd_setup_cdev(&aesd_device);
+
     if (result) {
         unregister_chrdev_region(dev, 1);
     }
@@ -208,9 +204,19 @@ void aesd_cleanup_module(void)
 {
     dev_t devno = MKDEV(aesd_major, aesd_minor);
     cdev_del(&aesd_device.cdev);
-    aesd_circular_buffer_deinit(&aesd_device.aesd_buffer);
-    if (aesd_device.entry.buffptr)
-        kfree(aesd_device.entry.buffptr);
+
+    uint8_t index;
+    struct aesd_buffer_entry *entry = NULL;
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.aesd_buffer, index)
+    {
+        kfree(entry->buffptr);
+    }
+
+    if(entry)
+    {
+        kfree(entry)
+    }
+
     mutex_destroy(&aesd_device.aesd_mutex);
     unregister_chrdev_region(devno, 1);
 }
