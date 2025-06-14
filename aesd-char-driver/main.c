@@ -197,9 +197,7 @@ int aesd_init_module(void)
 
     mutex_init(&aesd_device.aesd_mutex);
     aesd_circular_buffer_init(&aesd_device.aesd_buffer);
-
     result = aesd_setup_cdev(&aesd_device);
-
     if (result) {
         unregister_chrdev_region(dev, 1);
     }
@@ -209,13 +207,11 @@ int aesd_init_module(void)
 void aesd_cleanup_module(void)
 {
     dev_t devno = MKDEV(aesd_major, aesd_minor);
-
     cdev_del(&aesd_device.cdev);
     aesd_circular_buffer_deinit(&aesd_device.aesd_buffer);
-
     if (aesd_device.entry.buffptr)
         kfree(aesd_device.entry.buffptr);
-
+    mutex_destroy(&aesd_device.aesd_mutex);
     unregister_chrdev_region(devno, 1);
 }
 
