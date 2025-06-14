@@ -116,7 +116,6 @@
 
         entry = &dev->entry;
 
-        // Allocate or expand entry buffer
         if (entry->size == 0) {
             entry->buffptr = kmalloc(count, GFP_KERNEL);
             start_idx = 0;
@@ -138,15 +137,11 @@
         entry->size += count;
         retval = count;
 
-        // Only process newly written bytes for '\n'
         for (i = start_idx; i < entry->size; i++) {
             if (entry->buffptr[i] == '\n') {
-                // Entry is complete, add to circular buffer
                 aesd_circular_buffer_add_entry(&dev->aesd_buffer, entry);
-                // Reset entry for next write
                 entry->size = 0;
-                entry->buffptr = NULL;
-                break; // Only process one entry per write
+                break;
             }
         }
 
@@ -210,11 +205,6 @@ void aesd_cleanup_module(void)
     AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.aesd_buffer, index)
     {
         kfree(entry->buffptr);
-    }
-
-    if(entry)
-    {
-        kfree(entry)
     }
 
     mutex_destroy(&aesd_device.aesd_mutex);
