@@ -18,6 +18,38 @@
 
 #include "aesd-circular-buffer.h"
 
+
+struct aesd_buffer_entry *aesd_circular_buffer_get_entry_and_offset(
+    struct aesd_circular_buffer *buffer, uint32_t n, size_t *cummulative_offset)
+{
+    if(!buffer || n == 0)
+    {
+        return NULL;
+    }
+
+    uint8_t index = buffer->out_offs;
+    size_t count = 0;
+    size_t total = 0;
+
+    for(size_t i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
+    {
+        struct aesd_buffer_entry *entry = &buffer->entry[index];
+
+        if (entry->buffptr == NULL || entry->size == 0)
+            break;
+
+        if(count == n)
+        {
+            if(cummulative_offset) *cummulative_offset = total;
+            return entry;
+        }
+        total += entry->size;
+        index = (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        count++;
+    }
+    return NULL;
+}
+
 /**
  * @param buffer the buffer to search for corresponding offset.  Any necessary locking must be performed by caller.
  * @param char_offset the position to search for in the buffer list, describing the zero referenced
