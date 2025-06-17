@@ -6,9 +6,9 @@
  * Linux Device Drivers example code.
  * @author Gent Binaku @copyright Copyright (c) 2019
  */
-#include "aesd-circular-buffer.h"
-#include "aesd_ioctl.h"
-#include "aesdchar.h"
+#include "aesd-circular-buffer.h" 
+#include "aesd_ioctl.h" 
+#include "aesdchar.h" 
 #include <asm-generic/errno-base.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
@@ -138,7 +138,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
   if (copy_from_user(entry->buffptr + start_idx, buf, count)) {
     retval = -EFAULT;
     goto done;
-  
+  } // <-- THIS LINE WAS MISSING
 
   entry->size += count;
   retval = count;
@@ -156,14 +156,14 @@ done:
   return retval;
 }
 
-static loff_t aesd_llseek(struct file *filp, loff_t offset, int whence) {
+loff_t aesd_llseek(struct file *filp, loff_t offset, int whence) {
   loff_t ret;
   loff_t size;
   struct aesd_dev *dev = (struct aesd_dev *)filp->private_data;
 
   PDEBUG("llseek with offset %lld and whence %d", offset, whence);
 
-  mutex_lock(&dev->lock);
+  mutex_lock(&dev->aesd_mutex);
 
   size = aesd_size(&dev->aesd_buffer);
   switch (whence) {
@@ -176,12 +176,12 @@ static loff_t aesd_llseek(struct file *filp, loff_t offset, int whence) {
     ret = -EINVAL;
   }
 
-  mutex_unlock(&dev->lock);
+  mutex_unlock(&dev->aesd_mutex);
 
   return ret;
 }
 
-static int aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd,
+int aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd,
                                    uint32_t write_cmd_offset) {
   size_t entry_start_offset = 0;
 
@@ -195,7 +195,8 @@ static int aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd,
   return 0;
 }
 
-static long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+
   int retval = 0;
 
   if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
@@ -236,7 +237,7 @@ struct file_operations aesd_fops = {
     .unlocked_ioctl = aesd_ioctl,
 };
 
-static int aesd_setup_cdev(struct aesd_dev *dev) {
+int aesd_setup_cdev(struct aesd_dev *dev) {
   int err, devno = MKDEV(aesd_major, aesd_minor);
 
   cdev_init(&dev->cdev, &aesd_fops);
