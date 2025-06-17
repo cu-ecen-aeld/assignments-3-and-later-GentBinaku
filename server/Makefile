@@ -1,4 +1,3 @@
-
 # Binary target
 TARGET  ?= aesdsocket
 
@@ -28,7 +27,7 @@ $(TARGET): $(OBJ)
 
 # Compiling
 $(OBJ): $(SRC)
-	$(CC) $(CCFLAGS) -c -o $@ $<
+	$(CC) $(CCFLAGS) $(DEFINES) -c -o $@ $<
 
 # Run with arguments
 run:
