@@ -20,9 +20,9 @@
 
 
 struct aesd_buffer_entry *aesd_circular_buffer_get_entry_and_offset(
-    struct aesd_circular_buffer *buffer, uint32_t n, size_t *cummulative_offset)
+    struct aesd_circular_buffer *buffer, uint32_t command_offset, size_t *cummulative_offset)
 {
-    if(!buffer || n == 0)
+    if(!buffer || command_offset == 0)
     {
         return NULL;
     }
@@ -38,7 +38,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_get_entry_and_offset(
         if (entry->buffptr == NULL || entry->size == 0)
             break;
 
-        if(count == n)
+        if(count == command_offset)
         {
             if(cummulative_offset) *cummulative_offset = total;
             return entry;

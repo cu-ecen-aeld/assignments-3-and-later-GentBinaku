@@ -204,6 +204,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
   if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
     return -ENOTTY;
 
+  mutex_lock(&aesd_device.aesd_mutex);
   switch (cmd) {
 
   case AESDCHAR_IOCSEEKTO: {

@@ -2,6 +2,13 @@
 # Binary target
 TARGET  ?= aesdsocket
 
+#USE AESD DEVICE
+USE_AESD_CHAR_DEVICE ?= 1
+
+ifeq ($(USE_AESD_CHAR_DEVICE),1)
+  DEFINES += -DUSE_AESD_CHAR_DEVICE
+endif
+
 # Compiler and linker
 CC      ?= $(CROSS_COMPILE)gcc
 LD      ?= $(CROSS_COMPILE)ld
