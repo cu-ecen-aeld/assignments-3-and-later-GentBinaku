@@ -183,49 +183,59 @@ loff_t aesd_llseek(struct file *filp, loff_t offset, int whence) {
 
 int aesd_adjust_file_offset(struct file *filp, uint32_t write_cmd,
                                    uint32_t write_cmd_offset) {
-  size_t entry_start_offset = 0;
+    size_t entry_start_offset = 0;
+    struct aesd_buffer_entry *entry;
 
-  struct aesd_buffer_entry *entry = aesd_circular_buffer_get_entry_and_offset(
-      &aesd_device.aesd_buffer, write_cmd, &entry_start_offset);
+    printk(KERN_DEBUG "aesd_adjust_file_offset: called with write_cmd=%u, write_cmd_offset=%u\n",
+           write_cmd, write_cmd_offset);
 
-  if (!entry || write_cmd_offset > entry->size)
-    return -EINVAL;
+    entry = aesd_circular_buffer_get_entry_and_offset(
+        &aesd_device.aesd_buffer, write_cmd, &entry_start_offset);
 
-  filp->f_pos = entry_start_offset + write_cmd_offset;
-  return 0;
+    if (!entry) {
+        printk(KERN_ERR "aesd_adjust_file_offset: entry not found for write_cmd=%u\n", write_cmd);
+        return -EINVAL;
+    }
+
+    if (write_cmd_offset > entry->size) {
+        printk(KERN_ERR "aesd_adjust_file_offset: write_cmd_offset %u > entry size %zu\n",
+               write_cmd_offset, entry->size);
+        return -EINVAL;
+    }
+
+    filp->f_pos = entry_start_offset + write_cmd_offset;
+    printk(KERN_DEBUG "aesd_adjust_file_offset: new file position set to %lld\n", filp->f_pos);
+    return 0;
 }
 
 long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+    int retval = 0;
+    printk(KERN_DEBUG "aesd_ioctl: called with cmd=0x%x, arg=0x%lx\n", cmd, arg);
 
-  int retval = 0;
+    mutex_lock(&aesd_device.aesd_mutex);
+    switch (cmd) {
+    case AESDCHAR_IOCSEEKTO: {
+        struct aesd_seekto seekto;
+        if (copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) != 0) {
+            printk(KERN_ERR "aesd_ioctl: copy_from_user failed\n");
+            retval = -EFAULT;
+            goto done;
+        }
+        printk(KERN_DEBUG "aesd_ioctl: AESDCHAR_IOCSEEKTO write_cmd=%u, write_cmd_offset=%u\n",
+            seekto.write_cmd, seekto.write_cmd_offset);
 
-  if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
-    return -ENOTTY;
-  if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
-    return -ENOTTY;
-
-  mutex_lock(&aesd_device.aesd_mutex);
-  switch (cmd) {
-
-  case AESDCHAR_IOCSEEKTO: {
-    struct aesd_seekto seekto;
-    if (copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) !=
-        0) {
-      retval = -EFAULT;
-      goto done;
-    } else {
-      retval = aesd_adjust_file_offset(filp, seekto.write_cmd,
-                                       seekto.write_cmd_offset);
+        retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+        printk(KERN_DEBUG "aesd_ioctl: aesd_adjust_file_offset returned %d\n", retval);
+        break;
     }
-    break;
-  }
-  default:
-    retval = -ENOTTY;
-    break;
-  }
+    default:
+        printk(KERN_ERR "aesd_ioctl: Unknown IOCTL 0x%x\n", cmd);
+        retval = -ENOTTY;
+        break;
+    }
 done:
-  mutex_unlock(&aesd_device.aesd_mutex);
-  return retval;
+    mutex_unlock(&aesd_device.aesd_mutex);
+    return retval;
 }
 
 struct file_operations aesd_fops = {

@@ -30,7 +30,7 @@
 
 #define PORT 9000
 #define MAX_BACKLOG 5
-#define RECV_BUF_SIZE 1024
+#define RECV_BUF_SIZE 8192
 #define TIMER_THREAD_PERIOD 10
 #define FILE_MODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 #define DATA_FILE "/var/tmp/aesdsocketdata"
@@ -51,92 +51,88 @@ void signal_handler(int signum) {
   exit_requested = 1;
 }
 
+#include <errno.h>
+
 ssize_t send_all(int fd, const void *buf, size_t len) {
-  size_t total = 0;
-  const char *data = buf;
-  while (total < len) {
-    ssize_t sent = send(fd, data + total, len - total, 0);
-    if (sent <= 0) {
-      return -1;
+    size_t total = 0;
+    const char *data = buf;
+    while (total < len) {
+        ssize_t sent = send(fd, data + total, len - total, 0);
+        if (sent < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            return -1;
+        }
+        if (sent == 0) break; // Connection closed
+        total += sent;
     }
-    total += sent;
-  }
-  return total;
+    return total;
 }
+
 static ssize_t process_msg(const char *buffer, size_t buf_size, int client_fd,
                            pthread_mutex_t *mutex) {
-    size_t processed = 0;
-    char *newline = NULL;
-
-    while ((newline = memchr(buffer + processed, '\n', buf_size - processed)) != NULL) {
-
-        size_t packet_len = newline - (buffer + processed) + 1;
-
-        if (pthread_mutex_lock(mutex) != 0) {
-            syslog(LOG_ERR, "failed to lock mutex before writing");
-            return -1;
-        }
-
-        int fd = open(PATH, O_RDWR | O_CREAT | O_APPEND, 0664);
-        if (fd == -1) {
-            pthread_mutex_unlock(mutex);
-            syslog(LOG_ERR, "failed to open %s", PATH);
-            return -1;
-        }
-
+  // Process the whole buffer
+  if (pthread_mutex_lock(mutex) != 0) {
+    syslog(LOG_ERR, "failed to lock mutex before writing");
+    return -1;
+  }
+  int fd = open(PATH, O_RDWR | O_CREAT | O_APPEND, 0664);
+  if (fd == -1) {
+    pthread_mutex_unlock(mutex);
+    syslog(LOG_ERR, "failed to open %s", PATH);
+    return -1;
+  }
 #ifdef USE_AESD_CHAR_DEVICE
-        char seek_buf[RECV_BUF_SIZE + 1];
-        memcpy(seek_buf, buffer + processed, packet_len);
-        seek_buf[packet_len] = '\0';
-        int res = sscanf(seek_buf, "AESDCHAR_IOCSEEKTO:%u,%u", &seekto.write_cmd,
-                         &seekto.write_cmd_offset);
-        if (res == 2) {
-            if (ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto) != 0) {
-                close(fd);
-                pthread_mutex_unlock(mutex);
-                syslog(LOG_ERR, "failed to ioctl %s", PATH);
-                return -1;
-            }
-            // skip writing to device for ioctl command
-        } else
+  char seek_buf[RECV_BUF_SIZE + 1];
+  memcpy(seek_buf, buffer, buf_size);
+  seek_buf[buf_size] = '\0';
+  int res = sscanf(seek_buf, "AESDCHAR_IOCSEEKTO:%u,%u", &seekto.write_cmd,
+                   &seekto.write_cmd_offset);
+  if (res == 2) {
+    if (ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto) != 0) {
+      close(fd);
+      pthread_mutex_unlock(mutex);
+      syslog(LOG_ERR, "failed to ioctl %s", PATH);
+      return -1;
+    }
+    // skip writing to device for ioctl command
+  } else
 #endif
-        {
-            if (write(fd, buffer + processed, packet_len) != (ssize_t)packet_len) {
-                close(fd);
-                pthread_mutex_unlock(mutex);
-                syslog(LOG_ERR, "write failed");
-                return -1;
-            }
-        }
+  {
+    if (write(fd, buffer, buf_size) == -1) {
+      close(fd);
+      pthread_mutex_unlock(mutex);
+      syslog(LOG_ERR, "write failed");
+      return -1;
+    }
+  }
 
 #ifndef USE_AESD_CHAR_DEVICE
-        if (lseek(fd, 0, SEEK_SET) == -1) {
-            close(fd);
-            pthread_mutex_unlock(mutex);
-            syslog(LOG_ERR, "lseek failed");
-            return -1;
-        }
+  if (lseek(fd, 0, SEEK_SET) == -1) {
+    close(fd);
+    pthread_mutex_unlock(mutex);
+    syslog(LOG_ERR, "lseek failed");
+    return -1;
+  }
 #endif
-
-        // Send full file/device back to client
-        char file_buf[RECV_BUF_SIZE];
-        ssize_t n;
-        while ((n = read(fd, file_buf, sizeof(file_buf))) > 0) {
-            if (send_all(client_fd, file_buf, n) < 0) {
-                close(fd);
-                pthread_mutex_unlock(mutex);
-                syslog(LOG_ERR, "send_all failed");
-                return -1;
-            }
-        }
-
-        close(fd);
-        pthread_mutex_unlock(mutex);
-
-        processed += packet_len;
+  // Send full file/device back to client
+  char file_buf[RECV_BUF_SIZE];
+  int total_sent = 0;
+  ssize_t n;
+  while ((n = read(fd, file_buf, sizeof(file_buf))) > 0) {
+    if (send_all(client_fd, file_buf, n) < 0) {
+      close(fd);
+      pthread_mutex_unlock(mutex);
+      syslog(LOG_ERR, "send_all failed");
+      return -1;
     }
+    total_sent += n;
+  }
 
-    return processed; // Return how much was processed
+  close(fd);
+  pthread_mutex_unlock(mutex);
+
+  return total_sent;
 }
 
 void *thread_func(void *thread_param) {
@@ -250,7 +246,7 @@ void *timer_thread_func(void *thread_param) {
 
     strftime(outstr, sizeof(outstr), "timestamp: %Y, %b, %d, %H:%M:%S\n", tmp);
     fd = open(PATH, (O_CREAT | O_APPEND | O_RDWR), FILE_MODE);
-    
+
     if (fd == -1) {
       syslog(LOG_ERR, "failed to open %s", PATH);
       break;
@@ -262,7 +258,7 @@ void *timer_thread_func(void *thread_param) {
       break;
     }
 
-    if(lseek(fd, 0, SEEK_END) == -1)
+    if (lseek(fd, 0, SEEK_END) == -1)
       syslog(LOG_ERR, "failed to lseek %s", PATH);
 
     if (write(fd, outstr, strlen(outstr)) == -1)
@@ -364,6 +360,7 @@ static int create_server(int *mode) {
     close(STDERR_FILENO);
   }
 
+#ifndef USE_AESD_CHAR_DEVICE
   /* timer thread to write timestamp to *log_file */
   n = (struct node *)calloc(1, sizeof(struct node));
   if (n == NULL) {
@@ -375,12 +372,12 @@ static int create_server(int *mode) {
   n->mutex = &mutex;
   n->thread_complete_success = 0;
   rc = pthread_create(&n->tid, NULL, timer_thread_func, n);
-
   if (rc != 0) {
     syslog(LOG_ERR, "failed to create timer thread: %s", strerror(errno));
     goto error;
   }
   SLIST_INSERT_HEAD(&head, n, nodes);
+#endif
 
   while (!exit_requested) {
 

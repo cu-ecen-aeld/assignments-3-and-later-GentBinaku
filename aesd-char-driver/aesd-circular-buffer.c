@@ -22,7 +22,7 @@
 struct aesd_buffer_entry *aesd_circular_buffer_get_entry_and_offset(
     struct aesd_circular_buffer *buffer, uint32_t command_offset, size_t *cummulative_offset)
 {
-    if(!buffer || command_offset == 0)
+    if(!buffer)
     {
         return NULL;
     }
